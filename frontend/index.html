@@ -1,0 +1,48 @@
+<!-- frontend/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PTE Academic Practice</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>PTE Academic Practice Portal</h1>
+        <p>Powered by Gemini</p>
+    </header>
+
+    <nav id="task-selection">
+        <h2>Select a Task</h2>
+        <button class="task-btn" data-task="read-aloud">Read Aloud</button>
+        <button class="task-btn" data-task="describe-image">Describe Image</button>
+        
+        <!-- Add more buttons for other tasks here -->
+    </nav>
+
+    <main id="exam-area">
+        <div id="welcome-message">
+            <p>Select a task from the menu above to begin.</p>
+        </div>
+        <div id="loading-spinner" class="hidden">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+        <div id="question-container" class="hidden">
+            <!-- Question content will be dynamically inserted here -->
+        </div>
+        <div id="feedback-container" class="hidden">
+            <!-- Evaluation feedback will be shown here -->
+        </div>
+    </main>
+
+    <footer>
+        <p>© 2024 Wimbledon Language Academy</p>
+    </footer>
+
+    <!-- Include SortableJS for Re-order Paragraph -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
