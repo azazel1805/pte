@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const welcomeMessage = document.getElementById('welcome-message');
     
     // The backend URL. If you run the Flask app on a different port, change it here.
-    const API_BASE_URL = 'http://127.0.0.1:5001/api';
+    const API_BASE_URL = 'https://pte-backend-y5hy.onrender.com/api';
 
     // --- State Management for Audio Recording ---
     let mediaRecorder;
