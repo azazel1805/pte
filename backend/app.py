@@ -33,6 +33,7 @@ def generate_prompt(task, topic="general academic"):
         "repeat_sentence": f"Generate a single, clear sentence between 10 and 15 words long on the topic of '{topic}'. It should be grammatically correct and suitable for a PTE Repeat Sentence task.",
         "reorder_paragraph": f"Generate a coherent academic paragraph of exactly 4 sentences on '{topic}'. Then, present these 4 sentences in a completely random, shuffled order. Do not number them. Just present the shuffled sentences.",
         "summarize_written_text": f"Generate a dense, academic text of about 300 words on the topic of '{topic}'. The text must contain several key ideas and supporting details, suitable for a PTE 'Summarize Written Text' task."
+        "essay": f"Generate a short, two-sentence controversial topic or question suitable for a 20-minute PTE Essay Writing task. The topic should be about '{topic}'."
     }
     return prompts.get(task, "Generate a simple sentence.")
 
@@ -77,6 +78,14 @@ def get_describe_image():
             return jsonify({"error": "No images found for the topic"}), 404
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Failed to fetch image from Pexels: {e}"}), 500
+
+@app.route('/api/generate/essay', methods=['GET'])
+def get_essay_prompt():
+    if not gemini_model:
+        return jsonify({"error": "Gemini API not configured"}), 500
+    prompt = generate_prompt("essay")
+    response = gemini_model.generate_content(prompt)
+    return jsonify({"prompt": response.text})
 
 @app.route('/api/generate/reorder-paragraph', methods=['GET'])
 def get_reorder_paragraph():
