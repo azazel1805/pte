@@ -12,10 +12,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // const API_BASE_URL = 'https://your-backend-name.onrender.com/api'; // For production
 
     // --- State Management ---
-    let mediaRecorder;
-    let audioChunks = [];
     let originalTextForEvaluation = '';
+    
+    // --- Web Speech API Initialization ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
 
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+    } else {
+        console.error("Web Speech API is not supported in this browser.");
+    }
+    
     // --- Event Listeners ---
     taskButtons.forEach(button => {
         button.addEventListener('click', () => {
@@ -60,12 +71,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- Display Functions (Unchanged) ---
+    // --- Display Functions ---
     function displayReadAloud(data) {
         originalTextForEvaluation = data.text;
         questionContainer.innerHTML = `
             <h2 class="question-title">Read Aloud</h2>
-            <p class="instructions">Look at the text below. In 40 seconds, you must read this text aloud as naturally and clearly as possible.</p>
+            <p class="instructions">Look at the text below. You will have 40 seconds to read this text aloud as naturally and clearly as possible.</p>
             <div class="content-box"><p>${data.text}</p></div>
             ${createAudioControlsHTML()}
         `;
@@ -80,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         originalTextForEvaluation = `An image showing: ${data.alt}`;
         questionContainer.innerHTML = `
             <h2 class="question-title">Describe Image</h2>
-            <p class="instructions">Look at the image below. In 25 seconds, please speak into the microphone and describe in detail what the image is showing.</p>
+            <p class="instructions">Look at the image below. You will have 25 seconds to describe in detail what the image is showing.</p>
             <div class="image-container">
                 <img src="${data.imageUrl}" alt="${data.alt}">
                 <p class="photographer-credit">Photo by ${data.photographer} on Pexels</p>
@@ -103,8 +114,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('check-reorder-btn').addEventListener('click', () => alert("Answer checking for this question type is a future enhancement!"));
     }
 
-    // --- Audio Handling ---
+    // --- Audio Handling (Using Web Speech API) ---
     function createAudioControlsHTML() {
+        if (!SpeechRecognition) {
+            return `<div class="status" style="color:var(--danger-color); font-weight:bold;">Your browser does not support speech recognition. Please use Google Chrome or Microsoft Edge for speaking tasks.</div>`;
+        }
         return `
             <div class="audio-controls">
                 <button id="record-btn" class="record-btn">Start Recording</button>
@@ -114,72 +128,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addAudioControlListeners(taskType) {
         const recordBtn = document.getElementById('record-btn');
+        if (!recordBtn) return; 
+
         const statusDiv = document.getElementById('status');
-        
-        recordBtn.onclick = async () => {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-                recordBtn.textContent = 'Start Recording';
-                recordBtn.classList.remove('recording');
-                statusDiv.textContent = 'Processing... Please wait.';
-                recordBtn.disabled = true;
+        let isRecording = false;
+
+        recordBtn.onclick = () => {
+            if (isRecording) {
+                recognition.stop();
+                // onend will handle the state change
             } else {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    const options = { mimeType: 'audio/webm;codecs=opus' };
-                    mediaRecorder = new MediaRecorder(stream, options);
-                    audioChunks = [];
-                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-                    
-                    mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
-                        sendAudioForEvaluation(audioBlob, originalTextForEvaluation, taskType);
-                    };
-                    
-                    mediaRecorder.start();
-                    recordBtn.textContent = 'Stop Recording';
-                    recordBtn.classList.add('recording');
-                    statusDiv.textContent = 'Recording...';
-                } catch (err) {
-                    console.error("Error accessing microphone:", err);
-                    statusDiv.textContent = 'Could not access microphone. Please allow permission.';
-                    alert('Microphone access denied. Please allow microphone access in your browser settings and refresh the page.');
-                }
+                recognition.start();
+            }
+        };
+
+        recognition.onstart = () => {
+            isRecording = true;
+            recordBtn.textContent = 'Stop Recording';
+            recordBtn.classList.add('recording');
+            statusDiv.textContent = 'Recording... Speak now.';
+        };
+
+        recognition.onend = () => {
+            isRecording = false;
+            recordBtn.textContent = 'Start Recording';
+            recordBtn.classList.remove('recording');
+            statusDiv.textContent = 'Processing... Please wait.';
+            recordBtn.disabled = true;
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error', event.error);
+            statusDiv.textContent = `Error: ${event.error}. Please try again or check microphone permissions.`;
+            isRecording = false;
+        };
+        
+        recognition.onresult = (event) => {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                finalTranscript += event.results[i][0].transcript;
+            }
+            
+            if (finalTranscript.trim()) {
+                evaluateSpokenResponse(finalTranscript.trim(), originalTextForEvaluation, taskType);
+            } else {
+                statusDiv.textContent = "Couldn't hear you. Please try again.";
+                recordBtn.disabled = false;
             }
         };
     }
-    
-    // --- NEW: Evaluation Function ---
-    async function sendAudioForEvaluation(audioBlob, originalText, taskType) {
+
+    // --- Evaluation Function (Sends JSON) ---
+    async function evaluateSpokenResponse(transcript, originalText, taskType) {
         showLoading();
         questionContainer.classList.add('hidden');
         
-        const formData = new FormData();
-        formData.append('audio_file', audioBlob, 'student-recording.webm');
-        formData.append('originalText', originalText);
-        formData.append('taskType', taskType);
-
         try {
-            const response = await fetch(`${API_BASE_URL}/transcribe-and-evaluate`, {
+            const response = await fetch(`${API_BASE_URL}/evaluate/spoken-response`, {
                 method: 'POST',
-                body: formData,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transcript, originalText, taskType })
             });
 
-            const resultText = await response.text();
-            
             if (!response.ok) {
-                let errorMessage = `HTTP error! Status: ${response.status}`;
-                try {
-                    const errorJson = JSON.parse(resultText);
-                    errorMessage = errorJson.error || errorMessage;
-                } catch (e) {
-                    // The error response was not JSON, use the raw text
-                    if (resultText) errorMessage = resultText;
-                }
-                throw new Error(errorMessage);
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
+
+            const rawFeedback = await response.json();
+            const feedback = JSON.parse(rawFeedback);
             
-            const feedback = JSON.parse(JSON.parse(resultText));
             displayFeedback(feedback);
 
         } catch (error) {
@@ -190,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Display Feedback ---
     function displayFeedback(feedback) {
         feedbackContainer.innerHTML = `
             <h2 class="question-title">Evaluation Report</h2>
