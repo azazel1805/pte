@@ -4,3 +4,4 @@ python-dotenv
 requests
 Flask-Cors
 gunicorn
+google-cloud-speech
