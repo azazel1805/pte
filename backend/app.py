@@ -158,11 +158,23 @@ def evaluate_swt():
     }}
     """
     try:
-        response = gemini_model.generate_content(evaluation_prompt)
-        clean_response = response.text.strip().replace("```json", "").replace("```", "")
-        return jsonify(clean_response)
-    except Exception as e:
-        return jsonify({"error": f"Failed to evaluate summary with Gemini: {e}"}), 500
+    response = gemini_model.generate_content(evaluation_prompt)
+    clean_response_text = response.text.strip().replace("```json", "").replace("```", "")
+    
+    # --- THIS IS THE CRITICAL CHANGE ---
+    # The backend will now parse the JSON. If it fails, the backend catches the error.
+    json_feedback = json.loads(clean_response_text) 
+    
+    # Now, jsonify the PROPER Python dictionary.
+    return jsonify(json_feedback) 
+
+except json.JSONDecodeError:
+    # This error happens if Gemini's output isn't perfect JSON
+    print(f"JSONDecodeError from Gemini's response: {response.text}")
+    return jsonify({"error": "The AI returned a malformed response. Please try again."}), 500
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")
+    return jsonify({"error": f"Failed to evaluate essay with Gemini: {e}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
