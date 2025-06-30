@@ -100,6 +100,39 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         addAudioControlListeners('Describe Image');
     }
+    case 'essay':
+    response = await fetch(`${API_BASE_URL}/generate/essay`);
+    const essayData = await response.json();
+    displayEssay(essayData);
+    break;
+
+// Add this new display function
+function displayEssay(data) {
+    questionContainer.innerHTML = `
+        <h2 class="question-title">Essay Writing</h2>
+        <p class="instructions">You have 20 minutes to plan, write and revise an essay about the topic below. Your response will be judged on how well you develop a position, organize your ideas, and use language. You should write 200-300 words.</p>
+        <div class="content-box">
+            <p><strong>${data.prompt}</strong></p>
+        </div>
+        <textarea id="essay-textarea" placeholder="Start writing your essay here..." rows="15"></textarea>
+        <p id="word-count">Word Count: 0</p>
+        <button id="submit-essay-btn" class="task-btn" style="margin-top: 1rem;">Submit for Evaluation</button>
+    `;
+
+    const textArea = document.getElementById('essay-textarea');
+    const wordCount = document.getElementById('word-count');
+    
+    textArea.addEventListener('input', () => {
+        const words = textArea.value.trim().split(/\s+/).filter(word => word.length > 0);
+        wordCount.textContent = `Word Count: ${words.length}`;
+    });
+
+    // You would then create a new evaluation endpoint and function for essays
+    document.getElementById('submit-essay-btn').addEventListener('click', () => {
+        alert("Essay evaluation is the next step!");
+        // Here you would call a new backend endpoint like /api/evaluate/essay
+    });
+}
 
     function displayReorderParagraph(data) {
         const listItems = data.sentences.map(sentence => `<li class="reorder-item" draggable="true">${sentence}</li>`).join('');
@@ -177,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
     }
+    
 
     // --- Evaluation Function (Sends JSON) ---
     async function evaluateSpokenResponse(transcript, originalText, taskType) {
