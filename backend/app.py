@@ -1,7 +1,8 @@
 # backend/app.py
 
 import os
-import json # Import the json library
+import json
+import random # Import the random library for shuffling
 import google.generativeai as genai
 import requests
 from flask import Flask, jsonify, request
@@ -13,7 +14,6 @@ load_dotenv()
 
 # --- App Initialization ---
 app = Flask(__name__)
-# Be more specific with CORS in production if possible
 CORS(app) 
 
 # --- API Configuration ---
@@ -33,8 +33,8 @@ PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
 def generate_prompt(task, topic="general academic"):
     prompts = {
         "read_aloud": f"Generate a short, academic paragraph of about 60-70 words on the topic of '{topic}'. The paragraph should contain some complex vocabulary and varied sentence structure, suitable for a PTE Read Aloud task.",
-        "reorder_paragraph": f"Generate a coherent academic paragraph of exactly 4 sentences on '{topic}'. Then, present these 4 sentences in a completely random, shuffled order. Do not number them. Just present the shuffled sentences.",
-        # NEW PROMPT FOR ESSAY TASK
+        # MODIFIED PROMPT: We now ask for a coherent paragraph and shuffle it in Python for reliability.
+        "reorder_paragraph": f"Generate a single, coherent academic paragraph consisting of exactly 4 distinct sentences on the topic of '{topic}'. Ensure each sentence is on a new line.",
         "essay": f"Generate a short, two-sentence controversial topic or question suitable for a 20-minute PTE Essay Writing task. The topic should be about '{topic}'. The prompt should encourage taking a clear stance."
     }
     return prompts.get(task, "Generate a simple sentence.")
@@ -49,6 +49,7 @@ def index():
 
 @app.route('/api/generate/read-aloud', methods=['GET'])
 def get_read_aloud():
+    # ... (no change) ...
     if not gemini_model: return jsonify({"error": "Gemini API not configured"}), 500
     prompt = generate_prompt("read_aloud")
     response = gemini_model.generate_content(prompt)
@@ -56,6 +57,7 @@ def get_read_aloud():
 
 @app.route('/api/generate/describe-image', methods=['GET'])
 def get_describe_image():
+    # ... (no change) ...
     if not PEXELS_API_KEY: return jsonify({"error": "Pexels API key not found"}), 500
     search_terms = ["lecture", "graph", "technology", "environment", "cityscape", "laboratory"]
     random_topic = requests.utils.quote(search_terms[os.urandom(1)[0] % len(search_terms)])
@@ -71,24 +73,42 @@ def get_describe_image():
         else: return jsonify({"error": "No images found"}), 404
     except requests.exceptions.RequestException as e: return jsonify({"error": f"Failed to fetch image: {e}"}), 500
 
+# MODIFIED ROUTE FOR RE-ORDER PARAGRAPH
 @app.route('/api/generate/reorder-paragraph', methods=['GET'])
 def get_reorder_paragraph():
-    if not gemini_model: return jsonify({"error": "Gemini API not configured"}), 500
+    if not gemini_model: 
+        return jsonify({"error": "Gemini API not configured"}), 500
+    
     prompt = generate_prompt("reorder_paragraph")
     response = gemini_model.generate_content(prompt)
-    sentences = [s.strip() for s in response.text.split('\n') if s.strip()]
-    return jsonify({"sentences": sentences})
+    
+    # Create the solution array from the AI's response
+    solution_sentences = [s.strip() for s in response.text.split('\n') if s.strip()]
+    
+    # Create a copy to be shuffled
+    shuffled_sentences = solution_sentences[:]
+    random.shuffle(shuffled_sentences)
+    
+    # To ensure it's actually shuffled, re-shuffle if it ends up in the same order
+    while shuffled_sentences == solution_sentences and len(solution_sentences) > 1:
+        random.shuffle(shuffled_sentences)
 
-# NEW ROUTE TO GENERATE ESSAY PROMPT
+    # Send both the shuffled sentences for the user and the solution for checking
+    return jsonify({
+        "shuffledSentences": shuffled_sentences,
+        "solution": solution_sentences
+    })
+
 @app.route('/api/generate/essay', methods=['GET'])
 def get_essay_prompt():
-    if not gemini_model:
-        return jsonify({"error": "Gemini API not configured"}), 500
+    # ... (no change) ...
+    if not gemini_model: return jsonify({"error": "Gemini API not configured"}), 500
     prompt = generate_prompt("essay")
     response = gemini_model.generate_content(prompt)
     return jsonify({"prompt": response.text})
 
 # --- Evaluation Routes ---
+# ... (The evaluation routes below have no changes) ...
 
 @app.route('/api/evaluate/spoken-response', methods=['POST'])
 def evaluate_spoken_response():
@@ -104,44 +124,26 @@ def evaluate_spoken_response():
     try:
         response = gemini_model.generate_content(evaluation_prompt)
         clean_response = response.text.strip().replace("```json", "").replace("```", "")
-        # MODIFICATION: Parse the string into a Python dict and then jsonify it.
-        # This sends a proper JSON object to the frontend.
         response_data = json.loads(clean_response)
-        response_data['transcript'] = transcript # Ensure the original transcript is in the response
+        response_data['transcript'] = transcript
         return jsonify(response_data)
     except json.JSONDecodeError:
         return jsonify({"error": "Failed to parse evaluation response from AI. Please try again."}), 500
     except Exception as e: 
         return jsonify({"error": f"Failed to evaluate with Gemini: {e}"}), 500
 
-# NEW ROUTE TO EVALUATE ESSAY
 @app.route('/api/evaluate/essay', methods=['POST'])
 def evaluate_essay():
-    if not gemini_model:
-        return jsonify({"error": "Gemini API not configured"}), 500
+    if not gemini_model: return jsonify({"error": "Gemini API not configured"}), 500
     
     data = request.json
-    essay_prompt = data.get('prompt')
-    essay_text = data.get('essayText')
-
-    if not essay_text or not essay_prompt:
-        return jsonify({"error": "Essay prompt and text are required"}), 400
+    essay_prompt, essay_text = data.get('prompt'), data.get('essayText')
+    if not essay_text or not essay_prompt: return jsonify({"error": "Essay prompt and text are required"}), 400
 
     evaluation_prompt = f"""
-    You are an expert PTE Academic examiner evaluating a student's essay.
-    
-    Original Essay Prompt: "{essay_prompt}"
-    Student's Essay: "{essay_text}"
-
-    Please evaluate the essay based on the following PTE criteria:
-    1.  Content: How well does the essay address the prompt? Are the ideas relevant and well-supported? Score out of 5.
-    2.  Form: Is the word count between 200 and 300 words? Provide feedback.
-    3.  Grammar: Is the grammar correct and varied? Score out of 5.
-    4.  Vocabulary: Is the vocabulary appropriate, and is there a good range of words? Score out of 5.
-    5.  Structure and Coherence: Is the essay well-organized with clear paragraphs and logical flow? Score out of 5.
-
-    Provide your evaluation in a JSON format ONLY. Do not include any other text or markdown formatting like ```json.
-    Your response must be a single, valid JSON object.
+    You are an expert PTE Academic examiner evaluating a student's essay. Original Essay Prompt: "{essay_prompt}". Student's Essay: "{essay_text}".
+    Please evaluate the essay based on the following PTE criteria: Content, Form, Grammar, Vocabulary, Structure and Coherence.
+    Provide your evaluation in a JSON format ONLY. Do not include any other text or markdown formatting like ```json. Your response must be a single, valid JSON object.
     {{
       "content": {{ "score": "<score out of 5>", "feedback": "<Brief feedback on relevance and ideas>" }},
       "form": {{ "word_count": {len(essay_text.split())}, "feedback": "<Feedback on word count, ideally mentioning the 200-300 range>" }},
@@ -155,7 +157,6 @@ def evaluate_essay():
     try:
         response = gemini_model.generate_content(evaluation_prompt)
         clean_response = response.text.strip().replace("```json", "").replace("```", "")
-        # MODIFICATION: Parse the string into a Python dict and then jsonify it.
         response_data = json.loads(clean_response)
         return jsonify(response_data)
     except json.JSONDecodeError:
