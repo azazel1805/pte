@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingSpinner = document.getElementById('loading-spinner');
     const welcomeMessage = document.getElementById('welcome-message');
     
-    const API_BASE_URL = 'https://pte-backend-y5hy.onrender.co/api'; 
+    const API_BASE_URL = 'https://pte-backend-y5hy.onrender.com/api'; 
 
     let originalTextForEvaluation = '';
     let currentTimerInterval = null;
