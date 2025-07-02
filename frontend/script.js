@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingSpinner = document.getElementById('loading-spinner');
     const welcomeMessage = document.getElementById('welcome-message');
     
-    const API_BASE_URL = 'https://pte-backend-y5hy.onrender.com/api'; 
+    const API_BASE_URL = 'https://pte-backend-y5hy.onrender.co/api'; 
 
     let originalTextForEvaluation = '';
     let currentTimerInterval = null;
@@ -45,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // ... (no changes in this function) ...
         showLoading();
         feedbackContainer.classList.add('hidden');
-        
         try {
             let response;
             switch (task) {
@@ -87,61 +86,37 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Display Functions ---
     
     function displayReadAloud(data) {
-        // ... (no changes in this function) ...
         originalTextForEvaluation = data.text;
         questionContainer.innerHTML = `<h2 class="question-title">Read Aloud</h2><p class="instructions">You will have 30-40 seconds to read this text aloud as naturally and clearly as possible.</p><div class="content-box"><p>${data.text}</p></div>${createAudioControlsHTML()}`;
         addAudioControlListeners('Read Aloud');
     }
 
-    // MODIFIED: displayRepeatSentence
     function displayRepeatSentence(data) {
         originalTextForEvaluation = data.text;
-        questionContainer.innerHTML = `
-            <h2 class="question-title">Repeat Sentence</h2>
-            <p class="instructions">You will hear a sentence. Listen carefully and repeat the sentence exactly as you hear it.</p>
-            <div id="status-light" class="status-light-off"></div>
-            <button id="play-sentence-btn" class="task-btn">Play Sentence</button>
-            <div class="audio-controls-container" style="visibility: hidden;">
-                ${createAudioControlsHTML()}
-            </div>
-        `;
-        
+        questionContainer.innerHTML = `<h2 class="question-title">Repeat Sentence</h2><p class="instructions">You will hear a sentence. Listen carefully and repeat the sentence exactly as you hear it.</p><div id="status-light" class="status-light-off"></div><button id="play-sentence-btn" class="task-btn">Play Sentence</button><div class="audio-controls-container" style="visibility: hidden;">${createAudioControlsHTML()}</div>`;
         const playBtn = document.getElementById('play-sentence-btn');
         const statusLight = document.getElementById('status-light');
         const audioControls = document.querySelector('.audio-controls-container');
         const recordBtn = document.getElementById('record-btn');
-
         playBtn.addEventListener('click', () => {
             if (!data.text) return;
-            
             const utterance = new SpeechSynthesisUtterance(data.text);
-            // ** MODIFICATION: Set the voice to British English **
             utterance.lang = 'en-GB';
-
-            utterance.onstart = () => {
-                playBtn.disabled = true;
-                playBtn.textContent = 'Playing...';
-                statusLight.className = 'status-light-on';
-            };
-            utterance.onend = () => {
-                playBtn.textContent = 'Played';
-                statusLight.className = 'status-light-off';
-                audioControls.style.visibility = 'visible';
-                if(recordBtn) recordBtn.click(); // Auto-start recording
-            };
+            utterance.onstart = () => { playBtn.disabled = true; playBtn.textContent = 'Playing...'; statusLight.className = 'status-light-on'; };
+            utterance.onend = () => { playBtn.textContent = 'Played'; statusLight.className = 'status-light-off'; audioControls.style.visibility = 'visible'; if(recordBtn) recordBtn.click(); };
             window.speechSynthesis.speak(utterance);
         }, { once: true });
-
         addAudioControlListeners('Repeat Sentence');
     }
 
-    // MODIFIED: displayAnswerShortQuestion
+    // ** CORRECTED FUNCTION **
     function displayAnswerShortQuestion(data) {
         if (!data.question || !data.answer) {
              questionContainer.innerHTML = `<p style="color:red;">Error loading question. Please try again.</p>`;
              return;
         }
-        originalTextForEvaluation = data.question;
+        // The question is still stored for backend evaluation, but NOT displayed.
+        originalTextForEvaluation = data.question; 
         questionContainer.innerHTML = `
             <h2 class="question-title">Answer Short Question</h2>
             <p class="instructions">Listen to the question, then give a simple and short answer.</p>
@@ -157,20 +132,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const playBtn = document.getElementById('play-question-btn');
         const audioControls = document.querySelector('.audio-controls-container');
         const questionTextEl = questionContainer.querySelector('.content-box p');
+        const recordBtn = document.getElementById('record-btn');
 
         playBtn.addEventListener('click', () => {
-            questionTextEl.textContent = data.question; // Show the question text
+            // ** THE FIX IS HERE: We DO NOT display the question text. **
+            // We only update the instructions for the user.
+            questionTextEl.textContent = "Listen carefully...";
+            
             const utterance = new SpeechSynthesisUtterance(data.question);
-            // ** MODIFICATION: Set the voice to British English **
             utterance.lang = 'en-GB';
-
             utterance.onstart = () => {
                 playBtn.disabled = true;
                 playBtn.textContent = 'Playing...';
             };
             utterance.onend = () => {
                 playBtn.textContent = 'Played';
+                questionTextEl.innerHTML = `<strong>Speak your answer now.</strong>`;
                 audioControls.style.visibility = 'visible';
+                if (recordBtn) {
+                    recordBtn.click();
+                }
             };
             window.speechSynthesis.speak(utterance);
         }, { once: true });
@@ -178,7 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
         addAudioControlListeners('Answer Short Question', data.answer);
     }
     
-    // ... (No changes in other display functions like displayDescribeImage, displayReorderParagraph, etc.) ...
     function displayDescribeImage(data) {
         if (data.error) { questionContainer.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`; return; }
         originalTextForEvaluation = `An image showing: ${data.alt}`;
@@ -188,13 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
         startTimer(25, 'Preparation Time', document.getElementById('timer'), () => {
             document.getElementById('timer').style.color = 'var(--success-color)';
             try { new Audio('https://www.soundjay.com/buttons/beep-07a.mp3').play(); } catch(e) { console.warn("Could not play beep sound."); }
-            if (recordBtn) {
-                recordBtn.disabled = false;
-                recordBtn.click();
-            }
-            startTimer(40, 'Answering Time', document.getElementById('timer'), () => {
-                if (recordBtn && recordBtn.classList.contains('recording')) recordBtn.click();
-            });
+            if (recordBtn) { recordBtn.disabled = false; recordBtn.click(); }
+            startTimer(40, 'Answering Time', document.getElementById('timer'), () => { if (recordBtn && recordBtn.classList.contains('recording')) recordBtn.click(); });
         });
         addAudioControlListeners('Describe Image');
     }
@@ -227,10 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         questionContainer.innerHTML = `<h2 class="question-title">Essay Writing</h2><p class="instructions">You have 20 minutes to plan, write, and revise an essay on the topic below. Your response should be 200-300 words.</p><div class="content-box"><p><strong>${data.prompt}</strong></p></div><textarea id="essay-textarea" placeholder="Start writing your essay here..." rows="15"></textarea><p id="word-count">Word Count: 0</p><button id="submit-essay-btn" class="task-btn submit-btn">Submit for Evaluation</button>`;
         const textArea = document.getElementById('essay-textarea');
         const wordCountEl = document.getElementById('word-count');
-        textArea.addEventListener('input', () => {
-            const words = textArea.value.trim().split(/\s+/).filter(word => word.length > 0);
-            wordCountEl.textContent = `Word Count: ${words.length}`;
-        });
+        textArea.addEventListener('input', () => { const words = textArea.value.trim().split(/\s+/).filter(word => word.length > 0); wordCountEl.textContent = `Word Count: ${words.length}`; });
         document.getElementById('submit-essay-btn').addEventListener('click', () => {
             const essayText = textArea.value;
             if (essayText.trim().length < 50) { alert("Please write a more substantial essay before submitting."); return; }
@@ -239,7 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Audio & Evaluation Logic ---
-    // ... (No changes in the functions below this point) ...
     function createAudioControlsHTML() {
         if (!SpeechRecognition) return `<div class="status" style="color:var(--danger-color); font-weight:bold;">Your browser does not support speech recognition.</div>`;
         return `<div class="audio-controls"><button id="record-btn" class="record-btn">Start Recording</button><div id="status" class="status">Press start to record</div></div>`;
@@ -256,9 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition.onstart = () => { isRecording = true; finalTranscript = ''; recordBtn.textContent = 'Stop Recording'; recordBtn.classList.add('recording'); statusDiv.textContent = 'Recording...'; };
         recognition.onresult = (event) => {
             let newTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) newTranscript += event.results[i][0].transcript;
-            }
+            for (let i = event.resultIndex; i < event.results.length; ++i) { if (event.results[i].isFinal) newTranscript += event.results[i][0].transcript; }
             finalTranscript += newTranscript;
         };
         recognition.onend = () => {
@@ -281,13 +250,11 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading(); questionContainer.classList.add('hidden');
         try {
             const payload = { transcript, originalText, taskType };
-            if (correctAnswer) {
-                payload.correctAnswer = correctAnswer;
-            }
+            if (correctAnswer) payload.correctAnswer = correctAnswer;
             const res = await fetch(`${API_BASE_URL}/evaluate/spoken-response`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!res.ok) { const errorData = await res.json(); throw new Error(errorData.error || `HTTP error! status: ${res.status}`); }
             const feedback = await res.json();
-            displayFeedback(feedback);
+            displayFeedback(feedback, taskType); // Pass taskType to display function
         } catch (error) { console.error('Evaluation failed:', error); showWelcomeMessage(`Error during evaluation: ${error.message}`); } finally { hideLoading(); }
     }
     
@@ -300,14 +267,22 @@ document.addEventListener('DOMContentLoaded', () => {
             displayEssayFeedback(feedback);
         } catch (error) { console.error('Essay evaluation failed:', error); showWelcomeMessage(`Error during evaluation: ${error.message}`); } finally { hideLoading(); }
     }
-    function displayFeedback(feedback) {
-        feedbackContainer.innerHTML = `<h2 class="question-title">Evaluation Report</h2><div class="score-card"><h3>Overall Score (Estimated)</h3><p class="score">${feedback.overall_score_out_of_90} / 90</p><p><strong>Summary:</strong> ${feedback.final_summary}</p></div><div class="score-card"><h3>Your Transcript</h3><p><em>"${feedback.transcript}"</em></p></div><div class="score-card"><h3>Oral Fluency</h3><p class="score">${feedback.oral_fluency.score} / 5</p><p><strong>Feedback:</strong> ${feedback.oral_fluency.feedback}</p></div><div class="score-card"><h3>Pronunciation</h3><p class="score">${feedback.pronunciation.score} / 5</p><p><strong>Feedback:</strong> ${feedback.pronunciation.feedback}</p></div><div class="score-card"><h3>Content</h3><p class="score">${feedback.content.score} / ${feedback.taskType === 'Answer Short Question' ? 1:5}</p><p><strong>Feedback:</strong> ${feedback.content.feedback}</p></div>`;
+
+    // --- Feedback Display & UI Helpers ---
+    function displayFeedback(feedback, taskType) { // Accept taskType
+        let contentMaxScore = 5;
+        if (taskType === 'Answer Short Question') {
+            contentMaxScore = 1;
+        }
+        feedbackContainer.innerHTML = `<h2 class="question-title">Evaluation Report</h2><div class="score-card"><h3>Overall Score (Estimated)</h3><p class="score">${feedback.overall_score_out_of_90} / 90</p><p><strong>Summary:</strong> ${feedback.final_summary}</p></div><div class="score-card"><h3>Your Transcript</h3><p><em>"${feedback.transcript}"</em></p></div><div class="score-card"><h3>Oral Fluency</h3><p class="score">${feedback.oral_fluency.score} / 5</p><p><strong>Feedback:</strong> ${feedback.oral_fluency.feedback}</p></div><div class="score-card"><h3>Pronunciation</h3><p class="score">${feedback.pronunciation.score} / 5</p><p><strong>Feedback:</strong> ${feedback.pronunciation.feedback}</p></div><div class="score-card"><h3>Content</h3><p class="score">${feedback.content.score} / ${contentMaxScore}</p><p><strong>Feedback:</strong> ${feedback.content.feedback}</p></div>`;
         feedbackContainer.classList.remove('hidden');
     }
+    
     function displayEssayFeedback(feedback) {
         feedbackContainer.innerHTML = `<h2 class="question-title">Essay Evaluation Report</h2><div class="score-card"><h3>Overall Score (Estimated)</h3><p class="score">${feedback.overall_score_out_of_90} / 90</p><p><strong>Summary:</strong> ${feedback.final_summary}</p></div><div class="score-card"><h3>Content</h3><p class="score">${feedback.content.score} / 5</p><p><strong>Feedback:</strong> ${feedback.content.feedback}</p></div><div class="score-card"><h3>Form (Word Count)</h3><p class="score">${feedback.form.word_count} words</p><p><strong>Feedback:</strong> ${feedback.form.feedback}</p></div><div class="score-card"><h3>Grammar</h3><p class="score">${feedback.grammar.score} / 5</p><p><strong>Feedback:</strong> ${feedback.grammar.feedback}</p></div><div class="score-card"><h3>Vocabulary</h3><p class="score">${feedback.vocabulary.score} / 5</p><p><strong>Feedback:</strong> ${feedback.vocabulary.feedback}</p></div><div class="score-card"><h3>Structure & Coherence</h3><p class="score">${feedback.structure.score} / 5</p><p><strong>Feedback:</strong> ${feedback.structure.feedback}</p></div>`;
         feedbackContainer.classList.remove('hidden');
     }
+
     function startTimer(duration, phase, timerElement, onComplete) {
         if (currentTimerInterval) clearInterval(currentTimerInterval);
         let timer = duration;
@@ -315,12 +290,10 @@ document.addEventListener('DOMContentLoaded', () => {
         currentTimerInterval = setInterval(() => {
             timer--;
             timerElement.textContent = `${phase}: ${timer}s`;
-            if (timer <= 0) {
-                clearInterval(currentTimerInterval);
-                if (onComplete) onComplete();
-            }
+            if (timer <= 0) { clearInterval(currentTimerInterval); if (onComplete) onComplete(); }
         }, 1000);
     }
+    
     function showLoading() { questionContainer.classList.add('hidden'); welcomeMessage.classList.add('hidden'); feedbackContainer.classList.add('hidden'); loadingSpinner.classList.remove('hidden'); }
     function hideLoading() { loadingSpinner.classList.add('hidden'); questionContainer.classList.remove('hidden'); }
     function showWelcomeMessage(message = 'Select a task from the menu above to begin.') { welcomeMessage.innerHTML = `<p>${message}</p>`; welcomeMessage.classList.remove('hidden'); questionContainer.classList.add('hidden'); feedbackContainer.classList.add('hidden'); }
