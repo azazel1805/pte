@@ -33,7 +33,7 @@ def generate_prompt(task, topic="general academic"):
         "essay": f"Generate a short, two-sentence controversial topic or question for a 20-minute PTE Essay task about '{topic}'.",
         # NEW PROMPTS
         "repeat_sentence": "Generate a single, grammatically correct sentence of 10-15 words with average complexity, suitable for a PTE Repeat Sentence task.",
-        "answer_short_question": "You are a PTE test creator. Generate a simple general knowledge question whose answer is a single word or a short phrase. Provide the output as a JSON object ONLY with two keys: 'question' and 'answer'. For example: {\"question\": \"What do you call the piece of paper you receive in a shop after buying something?\", \"answer\": \"A receipt\"}"
+        "answer_short_question": "You are a PTE test creator. Generate a simple general knowledge question whose answer is a single word or a short phrase and always ask a different question when the page is refreshed. Provide the output as a JSON object ONLY with two keys: 'question' and 'answer'. For example: {\"question\": \"What do you call the piece of paper you receive in a shop after buying something?\", \"answer\": \"A receipt\"}"
     }
     return prompts.get(task, "Generate a simple sentence.")
 
