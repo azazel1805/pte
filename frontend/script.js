@@ -1,7 +1,7 @@
 // frontend/script.js
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Global Variables & Constants ---
+    // ... (no changes to initial setup) ...
     const taskButtons = document.querySelectorAll('.task-btn');
     const questionContainer = document.getElementById('question-container');
     const feedbackContainer = document.getElementById('feedback-container');
@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTimerInterval = null;
     let reorderParagraphSolution = [];
 
-    // --- Web Speech API Initialization ---
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
     if (SpeechRecognition) {
@@ -26,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("Web Speech API is not supported in this browser.");
     }
 
-    // --- Event Listeners ---
     taskButtons.forEach(button => {
         button.addEventListener('click', () => {
             if (currentTimerInterval) clearInterval(currentTimerInterval);
@@ -40,9 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- Core Task Loading Function ---
     async function loadTask(task) {
-        // ... (no changes in this function) ...
         showLoading();
         feedbackContainer.classList.add('hidden');
         try {
@@ -109,13 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
         addAudioControlListeners('Repeat Sentence');
     }
 
-    // ** CORRECTED FUNCTION **
+    // ** MODIFIED FUNCTION **
     function displayAnswerShortQuestion(data) {
         if (!data.question || !data.answer) {
              questionContainer.innerHTML = `<p style="color:red;">Error loading question. Please try again.</p>`;
              return;
         }
-        // The question is still stored for backend evaluation, but NOT displayed.
         originalTextForEvaluation = data.question; 
         questionContainer.innerHTML = `
             <h2 class="question-title">Answer Short Question</h2>
@@ -123,20 +118,27 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="content-box" style="margin-bottom: 1rem;">
                 <p>Click the button to hear the question.</p>
             </div>
-            <button id="play-question-btn" class="task-btn">Play Question</button>
-            <div class="audio-controls-container" style="visibility: hidden;">
+            <div class="button-group">
+                <button id="play-question-btn" class="task-btn">Play Question</button>
+                <button id="new-question-btn" class="task-btn secondary-btn">New Question</button>
+            </div>
+            <div class="audio-controls-container" style="visibility: hidden; margin-top: 1rem;">
                 ${createAudioControlsHTML()}
             </div>
         `;
 
         const playBtn = document.getElementById('play-question-btn');
+        const newQuestionBtn = document.getElementById('new-question-btn');
         const audioControls = document.querySelector('.audio-controls-container');
         const questionTextEl = questionContainer.querySelector('.content-box p');
         const recordBtn = document.getElementById('record-btn');
 
+        // Event listener for the "New Question" button
+        newQuestionBtn.addEventListener('click', () => {
+            loadTask('answer-short-question');
+        });
+
         playBtn.addEventListener('click', () => {
-            // ** THE FIX IS HERE: We DO NOT display the question text. **
-            // We only update the instructions for the user.
             questionTextEl.textContent = "Listen carefully...";
             
             const utterance = new SpeechSynthesisUtterance(data.question);
@@ -144,9 +146,11 @@ document.addEventListener('DOMContentLoaded', () => {
             utterance.onstart = () => {
                 playBtn.disabled = true;
                 playBtn.textContent = 'Playing...';
+                newQuestionBtn.disabled = true; // Disable during playback
             };
             utterance.onend = () => {
-                playBtn.textContent = 'Played';
+                playBtn.style.display = 'none'; // Hide play button after use
+                newQuestionBtn.style.display = 'none'; // Hide new question button
                 questionTextEl.innerHTML = `<strong>Speak your answer now.</strong>`;
                 audioControls.style.visibility = 'visible';
                 if (recordBtn) {
@@ -159,6 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         addAudioControlListeners('Answer Short Question', data.answer);
     }
     
+    // ... (rest of the file is unchanged) ...
     function displayDescribeImage(data) {
         if (data.error) { questionContainer.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`; return; }
         originalTextForEvaluation = `An image showing: ${data.alt}`;
@@ -210,7 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Audio & Evaluation Logic ---
     function createAudioControlsHTML() {
         if (!SpeechRecognition) return `<div class="status" style="color:var(--danger-color); font-weight:bold;">Your browser does not support speech recognition.</div>`;
         return `<div class="audio-controls"><button id="record-btn" class="record-btn">Start Recording</button><div id="status" class="status">Press start to record</div></div>`;
@@ -254,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE_URL}/evaluate/spoken-response`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!res.ok) { const errorData = await res.json(); throw new Error(errorData.error || `HTTP error! status: ${res.status}`); }
             const feedback = await res.json();
-            displayFeedback(feedback, taskType); // Pass taskType to display function
+            displayFeedback(feedback, taskType);
         } catch (error) { console.error('Evaluation failed:', error); showWelcomeMessage(`Error during evaluation: ${error.message}`); } finally { hideLoading(); }
     }
     
@@ -268,8 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { console.error('Essay evaluation failed:', error); showWelcomeMessage(`Error during evaluation: ${error.message}`); } finally { hideLoading(); }
     }
 
-    // --- Feedback Display & UI Helpers ---
-    function displayFeedback(feedback, taskType) { // Accept taskType
+    function displayFeedback(feedback, taskType) {
         let contentMaxScore = 5;
         if (taskType === 'Answer Short Question') {
             contentMaxScore = 1;
